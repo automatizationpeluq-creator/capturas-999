@@ -1,0 +1,26 @@
+# Los ojos del 999, segunda vía (11-oct-2026): cuando Cloudflare llega a su tope del mes, las webs quedan «en espera» y este flujo
+# las captura (móvil y ordenador, página completa, tope 5 s por web) y las sube a la nube. Mismo método; sólo cambia dónde corre.
+# Repositorio público: GitHub no cuenta minutos. La nube lleva igualmente su tope de 1.950 min/mes. Aquí no hay datos ni secretos: las fotos van a la nube y a Drive.
+name: capturas-999
+on:
+  repository_dispatch:
+    types: [capturar]        # la nube avisa al quedar una web en espera
+  schedule:
+    - cron: '17 */12 * * *'  # y cada 12 h por si se perdió un aviso
+  workflow_dispatch: {}
+concurrency:
+  group: capturas-999        # nunca dos vueltas a la vez (nada duplicado)
+  cancel-in-progress: false
+jobs:
+  capturar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.47.2-noble   # Chromium ya instalado: la vuelta no gasta minutos instalándolo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: capturas
+      - run: cd capturas && npm install --no-audit --no-fund playwright@1.47.2 >/dev/null && node capturar-en-espera.mjs
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
