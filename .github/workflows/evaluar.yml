@@ -1,0 +1,28 @@
+# El evaluador 10×10 del 999 (11-oct-2026): mide cada web que la nube encola (Chrome + Python) y le devuelve el resultado.
+# Repositorio público: GitHub no cuenta minutos. Aquí no hay datos, código del evaluador ni secretos: todo lo entrega la nube con el secreto.
+# Bucle: una vuelta mide hasta 55 min; si quedan webs, la nube lanza otra vuelta (repository_dispatch «evaluar»). Nunca dos vueltas a la vez.
+name: evaluar-999
+on:
+  repository_dispatch:
+    types: [evaluar]         # la nube avisa al encolar una web y al pedir la siguiente vuelta
+  schedule:
+    - cron: '41 * * * *'     # y cada hora por si se perdió un aviso
+  workflow_dispatch: {}
+concurrency:
+  group: evaluar-999
+  cancel-in-progress: false
+jobs:
+  evaluar:
+    runs-on: ubuntu-latest   # trae Chrome, Python 3 y Node
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: evaluar
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node evaluar/evaluar-en-espera.mjs
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+          MAX_MIN: 55
