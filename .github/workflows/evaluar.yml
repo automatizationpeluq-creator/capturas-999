@@ -26,3 +26,11 @@ jobs:
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           MAX_MIN: 55
+      - name: Conservar expedientes cifrados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-999-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/evidencias-999/*.zip.enc
+          retention-days: 7
+          if-no-files-found: ignore

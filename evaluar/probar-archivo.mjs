@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {encrypt,decrypt} from './archivo-evidencias.mjs';
+const secret='fixture-secret-not-a-real-credential',bytes=Buffer.from('Expediente privado\u0000texto');
+const a=encrypt(bytes,secret),b=encrypt(bytes,secret);
+assert.deepEqual(decrypt(a,secret),bytes);
+assert.notDeepEqual(a,b);
+assert.equal(a.includes(bytes),false);
+assert.throws(()=>decrypt(a,'otra-clave-no-real-incorrecta'));
+const changed=Buffer.from(a);changed[changed.length-1]^=1;
+assert.throws(()=>decrypt(changed,secret));
+assert.throws(()=>decrypt(a.subarray(0,60),secret));
+assert.throws(()=>encrypt(bytes,''));
+console.log(JSON.stringify({checks:7,result:'PASS',scope:'cifrado y autenticación; no subida a GitHub'}));

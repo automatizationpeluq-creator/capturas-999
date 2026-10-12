@@ -6,6 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import {archive} from './archivo-evidencias.mjs';
+import {createHash} from 'node:crypto';
 
 const BASE = 'https://negocios.automtizationninameu.es';
 const S = process.env.SECRETO_999; if (!S) { console.error('falta SECRETO_999'); process.exit(2); }
@@ -33,13 +35,15 @@ fs.rmSync(RAIZ, { recursive: true, force: true }); fs.mkdirSync(RAIZ, { recursiv
 const rz = await fetch(BASE + '/999/evaluador/codigo', { headers: cab });
 if (!rz.ok) { console.error('código del evaluador: HTTP ' + rz.status); process.exit(3); }
 const zip = path.join(RAIZ, 'codigo.zip'); fs.writeFileSync(zip, Buffer.from(await rz.arrayBuffer()));
+process.env.EVALUADOR_CODIGO_SHA256=createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
 let r = await correr('python3', ['-m', 'zipfile', '-e', zip, RAIZ], RAIZ, 120); if (r.code !== 0) { console.error('descomprimir: ' + r.out.slice(-500)); process.exit(3); }
 const V7 = path.join(CODIGO, 'estudio-mundial', 'v7');
 r = await correr('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], V7, 300); if (r.code !== 0) { console.error('npm: ' + r.out.slice(-500)); process.exit(3); }
 const EVALUADOR = path.join(V7, 'evaluador-operativo', 'evaluador-operativo-10x10', 'evaluar_web.py');
+r = await correr('python3', ['-m','pip','install','--disable-pip-version-check','--quiet','-r',path.join(path.dirname(EVALUADOR),'requirements-capacidades.txt')], RAIZ, 180); if(r.code!==0){console.error('dependencias de observación: '+r.out.slice(-500));process.exit(3);}
 const CHROME = path.join(RAIZ, 'chromium-999');
 fs.writeFileSync(CHROME, '#!/bin/sh\nexec "' + (process.env.CHROME_BIN || '/usr/bin/google-chrome') + '" --no-sandbox --disable-dev-shm-usage --disable-gpu "$@"\n'); fs.chmodSync(CHROME, 0o755);
-Object.assign(process.env, { CHROME_PATH: CHROME, AXE_PATH: path.join(V7, 'node_modules', 'axe-core', 'axe.min.js'), PYTHONIOENCODING: 'utf-8' });
+Object.assign(process.env, { CHROME_PATH: CHROME, AXE_PATH: path.join(V7, 'node_modules', 'axe-core', 'axe.min.js'), PYTHONIOENCODING: 'utf-8', PYTHONUTF8:'1' });
 log('código listo en', ((Date.now() - t0) / 1000).toFixed(0), 's');
 
 // 2. Medir una web (lo mismo que hacía servidor.mjs en Render, sin el archivo de evidencias).
@@ -62,6 +66,9 @@ async function evaluarTrabajo(t) {
   else res = { estado: 'error', stderr: ('código ' + r.code + ': ' + r.out).slice(-1500) };
   res.segundos_servidor = Math.round((Date.now() - ti) / 100) / 10;
   res.servidor = 'github'; res.site_version = t.version;
+  // Primero conservar el expediente cifrado; no destruirlo antes de poder recuperarlo.
+  fs.mkdirSync(salida,{recursive:true});fs.writeFileSync(path.join(salida,'RESULTADO-EVALUACION.json'),JSON.stringify(res,null,2));
+  res.evidencias=archive(salida,t,S,process.env.EVIDENCIAS_DIR||path.join(process.env.RUNNER_TEMP||'/tmp','evidencias-999'));
   fs.rmSync(dir, { recursive: true, force: true });
   return res;
 }
