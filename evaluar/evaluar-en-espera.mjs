@@ -58,6 +58,9 @@ async function evaluarTrabajo(t) {
   const informe = path.join(dir, 'informe.md'); fs.writeFileSync(informe, t.informe || '', 'utf8');
   const salida = path.join(dir, 'evaluacion');
   const args = [EVALUADOR, '--web', path.join(dir, 'web'), '--salida', salida, '--nombre', t.nombre || '', '--direccion', t.direccion || '', '--movil', t.movil || '', '--telefonos', (t.telefonos || []).join(','), '--informe', informe, '--id', String(t.id), '--sin-banco'];
+  // Cuando el productor entrega su intención original, se conserva en privado.
+  // El evaluador verifica HTML, ficha y negocio; no reconstruirla de la web.
+  if(t.generacion){const gf=path.join(dir,'GENERACION.json');fs.writeFileSync(gf,JSON.stringify(t.generacion),{encoding:'utf8',mode:0o600});args.push('--generacion',gf);}
   const ti = Date.now();
   const r = await correr('python3', args, path.dirname(EVALUADOR), MAX_S_WEB);
   const archivo = path.join(salida, 'RESULTADO-EVALUACION.json');
