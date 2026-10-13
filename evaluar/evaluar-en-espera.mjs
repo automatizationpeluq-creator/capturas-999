@@ -79,21 +79,32 @@ async function evaluarTrabajo(t) {
 
 // 3. La vuelta.
 let hechas = 0, errores = 0, ultimo = null, quedan = false, ultimaMedida = Date.now();
+// (13-oct 13:30) La nube se reinicia al desplegar: un fetch sin plazo ni reintento tiraba el proceso entero (exit 1, «All jobs have failed» en
+// el correo de Manuel). Cada llamada a la nube: plazo de 2 min y 3 intentos con 20 s entre ellos; si aun así falla, se para esta vuelta con
+// salida 0 (la nube la relanza) en vez de reventar.
+async function pedirNube(url, opts = {}, intentos = 3) {
+  let ultimo;
+  for (let i = 1; i <= intentos; i++) {
+    try { return await fetch(url, Object.assign({}, opts, { signal: AbortSignal.timeout(120000) })); }
+    catch (e) { ultimo = e; log('nube no contesta (' + i + '/' + intentos + '): ' + String(e.message || e).slice(0, 120)); if (i < intentos) await new Promise((r) => setTimeout(r, 20000)); }
+  }
+  return { ok: false, status: 0, error: ultimo, json: async () => ({}), text: async () => String(ultimo && ultimo.message || 'sin respuesta') };
+}
 for (;;) {
   if ((Date.now() - t0) / 60000 >= MAX_MIN) { quedan = true; log('tiempo de la vuelta agotado'); break; }
-  const rs = await fetch(BASE + '/999/evaluar/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github'), { headers: cab });
+  const rs = await pedirNube(BASE + '/999/evaluar/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github'), { headers: cab });
   if (rs.status === 204) { if (Date.now() - ultimaMedida >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 15000)); continue; } // (13-oct) se espera un rato por si llega otra
-  if (!rs.ok) { log('siguiente: HTTP ' + rs.status); break; }
-  const t = await rs.json(); if (!t || !t.id) break;
+  if (!rs.ok) { log('siguiente: HTTP ' + rs.status); quedan = true; break; }
+  let t; try { t = await rs.json(); } catch (e) { log('siguiente: respuesta ilegible'); quedan = true; break; } if (!t || !t.id) break;
   if (ultimo === t.id + ':' + t.version) { log('la nube repite', t.id, '(no aplicó el resultado): paro'); break; }
   ultimo = t.id + ':' + t.version;
   log('midiendo', t.id);
   let res; try { res = await evaluarTrabajo(t); } catch (e) { res = { estado: 'error', stderr: String(e.stack || e).slice(-1500) }; }
-  const rr = await fetch(BASE + '/999/evaluar/resultado', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, cab), body: JSON.stringify({ id: t.id, version: t.version, resultado: res }) });
+  const rr = await pedirNube(BASE + '/999/evaluar/resultado', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, cab), body: JSON.stringify({ id: t.id, version: t.version, resultado: res }) });
   const j = await rr.json().catch(() => ({}));
   if (res.estado === 'ok') hechas++; else errores++;
   ultimaMedida = Date.now();
   log(res.estado, t.id, res.segundos_servidor + ' s', res.fallos ? res.fallos.length + ' fallos' : '', 'bloquean', j.bloquean, rr.ok ? '' : 'HTTP ' + rr.status);
 }
 log('vuelta: medidas', hechas, 'errores', errores, 'en', ((Date.now() - t0) / 60000).toFixed(1), 'min');
-if (quedan) { const c = await fetch(BASE + '/999/evaluar/continuar', { method: 'POST', headers: cab }); log('siguiente vuelta:', await c.text()); }
+if (quedan) { const c = await pedirNube(BASE + '/999/evaluar/continuar', { method: 'POST', headers: cab }); log('siguiente vuelta:', await c.text()); }
