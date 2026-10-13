@@ -1,0 +1,30 @@
+# Sonda del 777 (13-oct-2026): una vuelta a mano para medir si Google Maps contesta desde GitHub y si Overture se baja aquí.
+# Repositorio público: el registro sólo enseña cifras y huellas. No toca la nube, Drive ni ningún dato.
+name: sonda-777
+on:
+  workflow_dispatch:
+    inputs:
+      loc:
+        description: 'Localidad'
+        default: 'Tomares'
+      prov:
+        description: 'Provincia'
+        default: 'Sevilla'
+concurrency:
+  group: buscar-777
+  cancel-in-progress: false
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: buscar
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cd buscar && npm install --no-audit --no-fund @duckdb/node-api@1.5.6-r.1 > /dev/null 2>&1; node sonda.mjs
+        env:
+          LOC: ${{ inputs.loc }}
+          PROV: ${{ inputs.prov }}
