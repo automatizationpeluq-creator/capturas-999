@@ -42,4 +42,6 @@ for (const w of p.webs.slice(0, maxWebs)) {
 }
 await browser.close();
 console.log('hechas', hechas, 'fallidas', fallidas, 'en', Math.round((Date.now() - t0) / 1000), 's');
+// (13-oct) Si quedaron webs sin capturar (tope de la vuelta), la nube lanza otra vuelta.
+if (p.webs.length > hechas + fallidas) { const c = await fetch(BASE + '/999/capturas/continuar', { method: 'POST', headers: cab }).catch(() => null); console.log('siguiente vuelta:', c ? await c.text() : 'sin respuesta'); }
 await apuntar(hechas);

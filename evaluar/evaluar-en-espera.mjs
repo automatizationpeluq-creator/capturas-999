@@ -13,6 +13,7 @@ const BASE = 'https://negocios.automtizationninameu.es';
 const S = process.env.SECRETO_999; if (!S) { console.error('falta SECRETO_999'); process.exit(2); }
 const MAX_MIN = Number(process.env.MAX_MIN || 55);          // una vuelta no pasa de esto (GitHub corta a las 360); luego, otra vuelta
 const MAX_S_WEB = Number(process.env.MAX_S_WEB || 900);     // igual que tiempo_maximo_s en evaluador.config.json
+const IDLE_MS = Number(process.env.IDLE_MIN || 10) * 60000; // (13-oct) sin nada que medir, la máquina espera hasta esto por si la nube hace otra web (una a una): no se arranca una máquina por web
 const cab = { authorization: 'Bearer ' + S };
 const t0 = Date.now();
 const RAIZ = path.resolve(process.env.RUNNER_TEMP || '/tmp', 'evaluador-999');
@@ -77,11 +78,11 @@ async function evaluarTrabajo(t) {
 }
 
 // 3. La vuelta.
-let hechas = 0, errores = 0, ultimo = null, quedan = false;
+let hechas = 0, errores = 0, ultimo = null, quedan = false, ultimaMedida = Date.now();
 for (;;) {
   if ((Date.now() - t0) / 60000 >= MAX_MIN) { quedan = true; log('tiempo de la vuelta agotado'); break; }
-  const rs = await fetch(BASE + '/999/evaluar/siguiente', { headers: cab });
-  if (rs.status === 204) break;
+  const rs = await fetch(BASE + '/999/evaluar/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github'), { headers: cab });
+  if (rs.status === 204) { if (Date.now() - ultimaMedida >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 15000)); continue; } // (13-oct) se espera un rato por si llega otra
   if (!rs.ok) { log('siguiente: HTTP ' + rs.status); break; }
   const t = await rs.json(); if (!t || !t.id) break;
   if (ultimo === t.id + ':' + t.version) { log('la nube repite', t.id, '(no aplicó el resultado): paro'); break; }
@@ -91,6 +92,7 @@ for (;;) {
   const rr = await fetch(BASE + '/999/evaluar/resultado', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, cab), body: JSON.stringify({ id: t.id, version: t.version, resultado: res }) });
   const j = await rr.json().catch(() => ({}));
   if (res.estado === 'ok') hechas++; else errores++;
+  ultimaMedida = Date.now();
   log(res.estado, t.id, res.segundos_servidor + ' s', res.fallos ? res.fallos.length + ' fallos' : '', 'bloquean', j.bloquean, rr.ok ? '' : 'HTTP ' + rr.status);
 }
 log('vuelta: medidas', hechas, 'errores', errores, 'en', ((Date.now() - t0) / 60000).toFixed(1), 'min');
