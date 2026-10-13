@@ -33,7 +33,9 @@ function correr(cmd, args, cwd, segundos) {
 
 // 1. El código del evaluador, desde la nube.
 fs.rmSync(RAIZ, { recursive: true, force: true }); fs.mkdirSync(RAIZ, { recursive: true });
-const rz = await fetch(BASE + '/999/evaluador/codigo', { headers: cab });
+// (13-oct 18:55) Medido: el 13-oct a las 17:58 y 18:13 la nube contestó 500 a los 20–36 s (se reiniciaba por CPU) y la vuelta acababa en
+// salida 3 («All jobs have failed»). Ahora con los mismos reintentos que el resto de llamadas (pedirNube, también ante 5xx).
+const rz = await pedirNube(BASE + '/999/evaluador/codigo', { headers: cab }, 4);
 if (!rz.ok) { console.error('código del evaluador: HTTP ' + rz.status); process.exit(3); }
 const zip = path.join(RAIZ, 'codigo.zip'); fs.writeFileSync(zip, Buffer.from(await rz.arrayBuffer()));
 process.env.EVALUADOR_CODIGO_SHA256=createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
@@ -85,7 +87,12 @@ let hechas = 0, errores = 0, ultimo = null, quedan = false, ultimaMedida = Date.
 async function pedirNube(url, opts = {}, intentos = 3) {
   let ultimo;
   for (let i = 1; i <= intentos; i++) {
-    try { return await fetch(url, Object.assign({}, opts, { signal: AbortSignal.timeout(120000) })); }
+    try {
+      const r = await fetch(url, Object.assign({}, opts, { signal: AbortSignal.timeout(120000) }));
+      // (13-oct 18:55) Un 5xx es la nube reiniciándose (CPU, despliegue): se reintenta igual que si no contestara.
+      if (r.status >= 500 && i < intentos) { ultimo = new Error('HTTP ' + r.status); log('nube con error ' + r.status + ' (' + i + '/' + intentos + '): reintento en 20 s'); await new Promise((ok) => setTimeout(ok, 20000)); continue; }
+      return r;
+    }
     catch (e) { ultimo = e; log('nube no contesta (' + i + '/' + intentos + '): ' + String(e.message || e).slice(0, 120)); if (i < intentos) await new Promise((r) => setTimeout(r, 20000)); }
   }
   return { ok: false, status: 0, error: ultimo, json: async () => ({}), text: async () => String(ultimo && ultimo.message || 'sin respuesta') };
