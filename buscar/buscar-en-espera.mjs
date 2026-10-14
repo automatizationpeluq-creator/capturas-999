@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 
 const BASE = 'https://negocios.automtizationninameu.es';
 const S = process.env.SECRETO_999; if (!S) { console.error('falta SECRETO_999'); process.exit(2); }
-const MAX_MIN = Number(process.env.MAX_MIN || 280), IDLE_MS = Number(process.env.IDLE_MIN || 5) * 60000, PRUEBA = (process.env.PRUEBA || '').trim();
+const MAX_MIN = Number(process.env.MAX_MIN || 280), IDLE_MS = Number(process.env.IDLE_MIN || 5) * 60000, PRUEBA = (process.env.PRUEBA || '').trim(), SOLA = (process.env.SOLA || '').trim(); // (SOLA: una localidad de verdad con el 777 apagado)
 const cab = { authorization: 'Bearer ' + S };
 const t0 = Date.now();
 const W = path.resolve(process.env.TRABAJO || path.join(process.env.RUNNER_TEMP || '/tmp', 'trabajo-777')); // (la caché de GitHub guarda listas/ y proceso/web_cache.json)
@@ -37,7 +37,7 @@ async function nube(url, opts = {}, intentos = 3) {
 }
 
 // 0 · Apagado o sin nada que buscar (y no es una prueba): se acaba aquí, sin preparar nada (la vuelta de cada hora no gasta).
-if (!PRUEBA) {
+if (!PRUEBA && !SOLA) {
   const re = await nube('/999/777/estado'); const e = await re.json().catch(() => ({}));
   if (!re.ok) { console.error('estado del 777: HTTP ' + re.status); process.exit(3); }
   if (!e.encendido || !e.hayQueBuscar) { log('777', e.encendido ? 'encendido, sin nada que buscar' : 'apagado', '· en cola', e.enCola); process.exit(0); }
@@ -116,12 +116,12 @@ async function hacer(t) {
 let hechas = 0, quedan = false, ultima = Date.now();
 for (;;) {
   if ((Date.now() - t0) / 60000 >= MAX_MIN) { quedan = true; log('tiempo de la vuelta agotado'); break; }
-  const rs = await nube('/999/777/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github') + (PRUEBA ? '&prueba=' + encodeURIComponent(PRUEBA) : ''));
-  if (rs.status === 204) { if (Date.now() - ultima >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 30000)); continue; }
-  if (!rs.ok) { log('siguiente: HTTP ' + rs.status); quedan = true; break; }
+  const rs = await nube('/999/777/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github') + (PRUEBA ? '&prueba=' + encodeURIComponent(PRUEBA) : '') + (SOLA ? '&sola=' + encodeURIComponent(SOLA) : ''));
+  if (rs.status === 204) { if (SOLA || PRUEBA) { log('siguiente: nada (' + decodeURIComponent(rs.headers.get('x-777') || '') + ')'); break; } if (Date.now() - ultima >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 30000)); continue; }
+  if (!rs.ok) { log('siguiente: HTTP ' + rs.status, (await rs.text().catch(() => '')).slice(0, 160)); quedan = !SOLA; break; }
   const t = await rs.json().catch(() => null); if (!t || !t.slug) { log('siguiente: respuesta sin localidad'); break; }
   await hacer(t); hechas++; ultima = Date.now();
-  if (t.prueba) break;
+  if (t.prueba || t.sola) break;
 }
 log('vuelta:', hechas, 'localidades en', ((Date.now() - t0) / 60000).toFixed(1), 'min');
-if (quedan && !PRUEBA) { const c = await nube('/999/777/continuar', { method: 'POST' }); log('siguiente vuelta:', (await c.text()).slice(0, 120)); }
+if (quedan && !PRUEBA && !SOLA) { const c = await nube('/999/777/continuar', { method: 'POST' }); log('siguiente vuelta:', (await c.text()).slice(0, 120)); }
