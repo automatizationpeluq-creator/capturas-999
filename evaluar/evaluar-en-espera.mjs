@@ -55,7 +55,8 @@ async function evaluarTrabajo(t) {
   const dir = path.join(RAIZ, 'webs', String(t.id) + '-' + String(t.version).replace(/[^a-z0-9_-]/gi, '_'));
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(path.join(dir, 'web', 'imagenes'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'web', 'index.html'), t.html, 'utf8');
+  // (15-oct, C130) Sin desplazamiento suave en la copia medida: axe medía el contraste a mitad de la animación (falsa alarma en el pie). No cambia lo que se ve.
+  fs.writeFileSync(path.join(dir, 'web', 'index.html'), String(t.html).replace(/<\/head>/i, '<style>html{scroll-behavior:auto!important}</style></head>'), 'utf8');
   for (const i of t.imagenes || []) fs.writeFileSync(path.join(dir, 'web', 'imagenes', path.basename(i.nombre)), Buffer.from(i.base64, 'base64'));
   // (14-oct, C129) Las fotos de otras rutas de la web (img-suyas/, icono.svg, logo.jpg…), en su sitio: antes la medida las daba por ausentes.
   for (const x of t.archivos || []) { const rel = String(x.ruta || '').split(String.fromCharCode(92)).join('/'); if (!rel || rel.includes('..') || path.isAbsolute(rel)) continue; const dest = path.join(dir, 'web', rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, Buffer.from(x.base64, 'base64')); }
