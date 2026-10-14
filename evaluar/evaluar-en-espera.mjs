@@ -57,6 +57,8 @@ async function evaluarTrabajo(t) {
   fs.mkdirSync(path.join(dir, 'web', 'imagenes'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'web', 'index.html'), t.html, 'utf8');
   for (const i of t.imagenes || []) fs.writeFileSync(path.join(dir, 'web', 'imagenes', path.basename(i.nombre)), Buffer.from(i.base64, 'base64'));
+  // (14-oct, C129) Las fotos de otras rutas de la web (img-suyas/, icono.svg, logo.jpg…), en su sitio: antes la medida las daba por ausentes.
+  for (const x of t.archivos || []) { const rel = String(x.ruta || '').split(String.fromCharCode(92)).join('/'); if (!rel || rel.includes('..') || path.isAbsolute(rel)) continue; const dest = path.join(dir, 'web', rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, Buffer.from(x.base64, 'base64')); }
   if (t.fuentes) { fs.mkdirSync(path.join(dir, 'web', 'fuentes'), { recursive: true }); for (const [n, b64] of Object.entries(t.fuentes)) fs.writeFileSync(path.join(dir, 'web', 'fuentes', path.basename(n)), Buffer.from(b64, 'base64')); }
   const informe = path.join(dir, 'informe.md'); fs.writeFileSync(informe, t.informe || '', 'utf8');
   const salida = path.join(dir, 'evaluacion');
