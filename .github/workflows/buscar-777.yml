@@ -1,0 +1,60 @@
+# El 777 (13-oct-2026): búsqueda de negocios por localidad con los programas del 4-oct, en GitHub. La nube avisa cuando el 777 está
+# «Encendido» y hay localidades en su cola (repository_dispatch «buscar»); la máquina pide cada localidad a la nube, la hace entera y le
+# devuelve el resultado. La nube es la única que escribe en Drive. Repositorio público: GitHub no cuenta minutos. Aquí no hay datos, ni
+# código del 777, ni secretos: el código lo baja de la nube con el secreto, y el registro sólo enseña cifras.
+# Nunca dos vueltas a la vez (una contra Google, como el 4-oct). La caché guarda lo ya consultado entre vueltas (no repetir búsquedas).
+name: buscar-777
+on:
+  repository_dispatch:
+    types: [buscar]
+  schedule:
+    - cron: '23 * * * *'      # cada hora, por si se perdió un aviso (sin cola o apagado, termina en minutos)
+  workflow_dispatch:
+    inputs:
+      prueba:
+        description: 'Prueba sin escribir nada: «Localidad (Provincia)» de una ya hecha'
+        default: ''
+concurrency:
+  group: buscar-777
+  cancel-in-progress: false
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      TRABAJO: ${{ github.workspace }}/trabajo-777
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: buscar
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Recuperar lo ya consultado
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            trabajo-777/listas
+            trabajo-777/proceso/web_cache.json
+            trabajo-777/proceso/overture_andalucia.json
+            trabajo-777/proceso/overture_webs_andalucia.json
+            trabajo-777/proceso/overture_version.txt
+          key: buscar-777-${{ github.run_id }}
+          restore-keys: buscar-777-
+      - run: node buscar/buscar-en-espera.mjs
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+          PRUEBA: ${{ inputs.prueba }}
+          MAX_MIN: 280
+          IDLE_MIN: 5
+      - name: Guardar lo consultado
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            trabajo-777/listas
+            trabajo-777/proceso/web_cache.json
+            trabajo-777/proceso/overture_andalucia.json
+            trabajo-777/proceso/overture_webs_andalucia.json
+            trabajo-777/proceso/overture_version.txt
+          key: buscar-777-${{ github.run_id }}-${{ github.run_attempt }}
