@@ -14,6 +14,9 @@ on:
       prueba:
         description: 'Prueba sin escribir nada: «Localidad (Provincia)» de una ya hecha'
         default: ''
+      sola:
+        description: 'Una sola localidad de verdad (escribe en Drive) con el 777 apagado: «Localidad (Provincia)»'
+        default: ''
 concurrency:
   group: buscar-777
   cancel-in-progress: false
@@ -45,6 +48,7 @@ jobs:
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           PRUEBA: ${{ inputs.prueba }}
+          SOLA: ${{ inputs.sola }}
           MAX_MIN: 280
           IDLE_MIN: 5
       - name: Guardar lo consultado
