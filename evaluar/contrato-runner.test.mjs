@@ -1,0 +1,4 @@
+import{test}from'node:test';import assert from'node:assert/strict';import{validarConfirmacion,validarPendientes}from'./contrato-runner.mjs';
+const t={id:'prueba',version:7};
+test('sólo cuenta aceptación de identidad y versión exactas',()=>{assert.equal(validarConfirmacion({ok:true},{ok:true,...t},t).version,7);for(const b of [{ok:true},{ok:true,id:'otro',version:7},{ok:true,...t,version:6},{ok:true,...t,ignorado:'antiguo'},{error:'error'},{ok:false,...t}])assert.throws(()=>validarConfirmacion({ok:true},b,t));assert.throws(()=>validarConfirmacion({ok:false},{ok:true,...t},t));});
+test('no instala por cola vacía ni mantenimiento y rechaza un contrato desconocido',()=>{assert.equal(validarPendientes({mantenimiento:false,cola:[]}),false);assert.equal(validarPendientes({mantenimiento:true,cola:['a']}),false);assert.equal(validarPendientes({mantenimiento:false,cola:['a']}),true);assert.throws(()=>validarPendientes({cola:['a']}));});

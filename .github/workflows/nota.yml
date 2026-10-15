@@ -20,13 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: nota
+          sparse-checkout: |
+            nota
+            control
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Pruebas del contrato
         run: node --test nota/notar-en-espera.test.mjs
+      - name: Comprobar pausa y trabajo antes de instalar
+        id: permiso
+        run: node control/preflight.mjs nota
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
       - name: Comprobar trabajo pendiente
+        if: steps.permiso.outputs.activo == 'true'
         id: pendientes
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
@@ -44,13 +52,13 @@ jobs:
           console.log('Revisiones textuales pendientes:', d.pendientes);
           JS
       - name: Modelo guardado (caché de GitHub, para no bajarlo cada vez)
-        if: steps.pendientes.outputs.cantidad != '0'
+        if: steps.permiso.outputs.activo == 'true' && steps.pendientes.outputs.cantidad != '0'
         uses: actions/cache@v4
         with:
           path: .modelos
           key: ollama-qwen2.5-3b-instruct-v1
       - name: Ollama
-        if: steps.pendientes.outputs.cantidad != '0'
+        if: steps.permiso.outputs.activo == 'true' && steps.pendientes.outputs.cantidad != '0'
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           sudo systemctl stop ollama 2>/dev/null || true   # (el servicio del instalador no usa la carpeta de la caché)
@@ -58,7 +66,7 @@ jobs:
           for i in $(seq 1 30); do curl -s localhost:11434/api/tags >/dev/null && break; sleep 1; done
           ollama pull "$MODELO"
       - run: node nota/notar-en-espera.mjs
-        if: steps.pendientes.outputs.cantidad != '0'
+        if: steps.permiso.outputs.activo == 'true' && steps.pendientes.outputs.cantidad != '0'
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           MAX_MIN: 50

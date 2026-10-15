@@ -25,6 +25,7 @@ const una = async (w, vp, nombre) => {
 for (;;) {
   let p;
   try { p = await (await fetch(BASE + '/999/capturas/pendientes', Object.assign({ headers: cab }, conPlazo(30000)))).json(); } catch (e) { console.log('pendientes:', String(e.message).slice(0, 120)); await new Promise((r) => setTimeout(r, 15000)); if (Date.now() - t0 >= MAX_MS) break; continue; }
+  if(p.mantenimiento) break;
   if (!p.webs || !p.webs.length) {
     quedaban = 0;
     if (Date.now() - ultimaWeb >= IDLE_MS || Date.now() - t0 >= MAX_MS) break;

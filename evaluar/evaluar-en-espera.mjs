@@ -1,3 +1,4 @@
+import {validarConfirmacion,validarPendientes} from './contrato-runner.mjs';
 // El evaluador 10×10 del 999 corriendo en GitHub Actions (11-oct-2026). Mismo método que en el PC y que en Render: la nube entrega
 // cada web por medir (GET /999/evaluar/siguiente), aquí se escribe en disco, se pasa evaluar_web.py con Chrome y el resultado vuelve
 // a la nube (POST /999/evaluar/resultado), que lo aplica en la web y en el panel.
@@ -22,7 +23,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 function correr(cmd, args, cwd, segundos) {
   return new Promise((ok) => {
-    const p = spawn(cmd, args, { cwd, env: process.env });
+    const p = spawn(cmd, args, { cwd, env: process.env, windowsHide:true });
     const t = setTimeout(() => p.kill('SIGKILL'), segundos * 1000);
     let out = '';
     p.on('error', (e) => { clearTimeout(t); ok({ code: -1, out: out + 'spawn: ' + e.message }); });
@@ -31,6 +32,11 @@ function correr(cmd, args, cwd, segundos) {
   });
 }
 
+// Verificación barata antes de descargar código, instalar dependencias o tocar archivos.
+const diagnostico=process.env.PRUEBA_AISLADA_999==='1';
+const pre = diagnostico?new Response(JSON.stringify({mantenimiento:false,cola:['caso-sintetico']})):await pedirNube(BASE+'/999/evaluar/estado',{headers:cab});
+if(!pre.ok)throw new Error('No se puede comprobar la pausa del evaluador: HTTP '+pre.status);
+if(!validarPendientes(await pre.json())){log('sin trabajo o en mantenimiento: no se instala ni se mide');process.exit(0);}
 // 1. El código del evaluador, desde la nube.
 fs.rmSync(RAIZ, { recursive: true, force: true }); fs.mkdirSync(RAIZ, { recursive: true });
 // (13-oct 18:55) Medido: el 13-oct a las 17:58 y 18:13 la nube contestó 500 a los 20–36 s (se reiniciaba por CPU) y la vuelta acababa en
@@ -55,14 +61,19 @@ async function evaluarTrabajo(t) {
   const dir = path.join(RAIZ, 'webs', String(t.id) + '-' + String(t.version).replace(/[^a-z0-9_-]/gi, '_'));
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(path.join(dir, 'web', 'imagenes'), { recursive: true });
-  // (15-oct, C130) Sin desplazamiento suave en la copia medida: axe medía el contraste a mitad de la animación (falsa alarma en el pie). No cambia lo que se ve.
-  fs.writeFileSync(path.join(dir, 'web', 'index.html'), String(t.html).replace(/<\/head>/i, '<style>html{scroll-behavior:auto!important}</style></head>'), 'utf8');
+  // HTML exacto: la intención del productor está vinculada a estos bytes por SHA-256.
+  fs.writeFileSync(path.join(dir, 'web', 'index.html'), String(t.html), 'utf8');
   for (const i of t.imagenes || []) fs.writeFileSync(path.join(dir, 'web', 'imagenes', path.basename(i.nombre)), Buffer.from(i.base64, 'base64'));
   // (14-oct, C129) Las fotos de otras rutas de la web (img-suyas/, icono.svg, logo.jpg…), en su sitio: antes la medida las daba por ausentes.
   for (const x of t.archivos || []) { const rel = String(x.ruta || '').split(String.fromCharCode(92)).join('/'); if (!rel || rel.includes('..') || path.isAbsolute(rel)) continue; const dest = path.join(dir, 'web', rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, Buffer.from(x.base64, 'base64')); }
   if (t.fuentes) { fs.mkdirSync(path.join(dir, 'web', 'fuentes'), { recursive: true }); for (const [n, b64] of Object.entries(t.fuentes)) fs.writeFileSync(path.join(dir, 'web', 'fuentes', path.basename(n)), Buffer.from(b64, 'base64')); }
   const informe = path.join(dir, 'informe.md'); fs.writeFileSync(informe, t.informe || '', 'utf8');
   const salida = path.join(dir, 'evaluacion');
+  const automation={schema:'automatizacion-evaluador-999-1',capture:{enabled:true,timeout_seconds:900,lab_samples:3},acquisition:true};
+  const modelRoot=process.env.MODELOS_999_DIR;
+  if(modelRoot){const perception=path.join(dir,'PERCEPCION.json');fs.writeFileSync(perception,JSON.stringify({schema:'percepcion-local-config-999-1',enabled:true,model_root:path.resolve(modelRoot),channels:['semantics','visual','layout'],threads:2,max_images:32,max_regions:128,max_units:1000,timeout_seconds:1200,network_policy:'deny'}));automation.perception=perception;automation.require_complete_perception=true;}
+  const automationFile=path.join(dir,'AUTOMATIZACION.json');fs.writeFileSync(automationFile,JSON.stringify(automation));
+  process.env.CRITERIO_AUTOMATIZACION_FILE=automationFile;
   const args = [EVALUADOR, '--web', path.join(dir, 'web'), '--salida', salida, '--nombre', t.nombre || '', '--direccion', t.direccion || '', '--movil', t.movil || '', '--telefonos', (t.telefonos || []).join(','), '--informe', informe, '--id', String(t.id), '--sin-banco'];
   // Cuando el productor entrega su intención original, se conserva en privado.
   // El evaluador verifica HTML, ficha y negocio; no reconstruirla de la web.
@@ -82,6 +93,17 @@ async function evaluarTrabajo(t) {
   return res;
 }
 
+// Diagnóstico técnico con un caso sintético: no reserva colas, no publica resultados ni envía mensajes.
+if(diagnostico){
+ const html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Taller de prueba</title></head><body><h1>Taller de prueba</h1><p>Reparación de bicicletas con cita en Calle de Prueba 1, Ciudad.</p><a href="tel:+34900000000">Llamar al taller</a></body></html>';
+ const informe='# Taller de prueba · bicicletas · Ciudad\n## 7. Contacto\n- Teléfono: 900000000\n- Dirección: Calle de Prueba 1, Ciudad';
+ const id='caso-sintetico-999',version=1;
+ const generacion={schema:'intencion-generador-999-1',business_id:id,source_index_sha256:createHash('sha256').update(html).digest('hex'),brief_sha256:createHash('sha256').update(informe).digest('hex'),approved_by_business:false,quality_score:null};
+ const res=await evaluarTrabajo({id,version,html,informe,nombre:'Taller de prueba',direccion:'Calle de Prueba 1, Ciudad',movil:'900000000',telefonos:['900000000'],imagenes:[],archivos:[],fuentes:{},generacion});
+ const summary={schema:'diagnostico-linux-999-1',estado:res.estado,stderr:res.stderr||null,segundos:res.segundos_servidor,codigo_sha256:process.env.EVALUADOR_CODIGO_SHA256,criterio_maestro:res.criterio_maestro||null,evidencias:res.evidencias,cola_reservada:false,publicado:false,mensajes:0};
+ fs.writeFileSync(path.join(process.env.GITHUB_WORKSPACE||RAIZ,'DIAGNOSTICO-LINUX.json'),JSON.stringify(summary,null,2));console.log('::notice title=Diagnóstico Linux 999::'+JSON.stringify({estado:res.estado,segundos:res.segundos_servidor,codigo_sha256:process.env.EVALUADOR_CODIGO_SHA256,mensajes:0}));
+ if(res.estado!=='ok'){console.error(res.stderr);process.exit(1);}process.exit(0);
+}
 // 3. La vuelta.
 let hechas = 0, errores = 0, ultimo = null, quedan = false, ultimaMedida = Date.now();
 // (13-oct 13:30) La nube se reinicia al desplegar: un fetch sin plazo ni reintento tiraba el proceso entero (exit 1, «All jobs have failed» en
@@ -103,15 +125,16 @@ async function pedirNube(url, opts = {}, intentos = 3) {
 for (;;) {
   if ((Date.now() - t0) / 60000 >= MAX_MIN) { quedan = true; log('tiempo de la vuelta agotado'); break; }
   const rs = await pedirNube(BASE + '/999/evaluar/siguiente?runner=' + encodeURIComponent(process.env.GITHUB_RUN_ID || 'github'), { headers: cab });
-  if (rs.status === 204) { if (Date.now() - ultimaMedida >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 15000)); continue; } // (13-oct) se espera un rato por si llega otra
+  if (rs.status === 204) { if (rs.headers.get('x-999-pausado') === 'mantenimiento') break; if (Date.now() - ultimaMedida >= IDLE_MS) break; await new Promise((r) => setTimeout(r, 15000)); continue; } // (13-oct) se espera un rato por si llega otra
   if (!rs.ok) { log('siguiente: HTTP ' + rs.status); quedan = true; break; }
   let t; try { t = await rs.json(); } catch (e) { log('siguiente: respuesta ilegible'); quedan = true; break; } if (!t || !t.id) break;
   if (ultimo === t.id + ':' + t.version) { log('la nube repite', t.id, '(no aplicó el resultado): paro'); break; }
   ultimo = t.id + ':' + t.version;
   log('midiendo', t.id);
   let res; try { res = await evaluarTrabajo(t); } catch (e) { res = { estado: 'error', stderr: String(e.stack || e).slice(-1500) }; }
-  const rr = await pedirNube(BASE + '/999/evaluar/resultado', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, cab), body: JSON.stringify({ id: t.id, version: t.version, resultado: res }) });
+  const rr = await pedirNube(BASE + '/999/evaluar/resultado', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, cab), body: JSON.stringify({ id: t.id, version: t.version, token:t.arriendo?.token, resultado: res }) });
   const j = await rr.json().catch(() => ({}));
+  try { validarConfirmacion(rr,j,t); } catch(e) { errores++;log('resultado no aceptado:',t.id,e.message,'HTTP',rr.status);break; }
   if (res.estado === 'ok') hechas++; else errores++;
   ultimaMedida = Date.now();
   log(res.estado, t.id, res.segundos_servidor + ' s', res.fallos ? res.fallos.length + ' fallos' : '', 'bloquean', j.bloquean, rr.ok ? '' : 'HTTP ' + rr.status);

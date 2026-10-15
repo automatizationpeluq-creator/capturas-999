@@ -1,0 +1,58 @@
+name: verificar-integracion-999
+on:
+  push:
+    branches: [fix/999-integracion-15oct]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: diagnostico-integracion-999
+  cancel-in-progress: false
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MODELO: qwen2.5:3b-instruct
+      OLLAMA_MODELS: ${{ github.workspace }}/.modelos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Contratos del cliente
+        run: node --test nota/notar-en-espera.test.mjs evaluar/contrato-runner.test.mjs
+      - name: Evaluador en Linux con una copia sintética
+        run: node evaluar/evaluar-en-espera.mjs
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+          PRUEBA_AISLADA_999: "1"
+          MAX_S_WEB: 900
+      - name: Recuperar modelo de Ollama
+        uses: actions/cache@v4
+        with:
+          path: .modelos
+          key: ollama-qwen2.5-3b-instruct-v1
+      - name: Preparar Ollama para una inferencia
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          sudo systemctl stop ollama 2>/dev/null || true
+          (ollama serve > /tmp/ollama-999.log 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS localhost:11434/api/tags >/dev/null && break; sleep 1; done
+          ollama pull "$MODELO"
+      - name: Probar Ollama real con emisor falso
+        run: node nota/prueba-ollama-real.mjs
+      - name: Conservar diagnóstico acotado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-integracion-999
+          path: |
+            DIAGNOSTICO-LINUX.json
+            DIAGNOSTICO-OLLAMA.json
+            ${{ runner.temp }}/evidencias-999/*.zip.enc
+          retention-days: 1
+          if-no-files-found: ignore

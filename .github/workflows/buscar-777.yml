@@ -29,11 +29,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: buscar
+          sparse-checkout: |
+            buscar
+            control
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Comprobar pausa y trabajo antes de instalar
+        id: permiso
+        run: node control/preflight.mjs buscar
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
       - name: Recuperar lo ya consultado
+        if: steps.permiso.outputs.activo == 'true'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -44,7 +52,8 @@ jobs:
             trabajo-777/proceso/overture_version.txt
           key: buscar-777-${{ github.run_id }}
           restore-keys: buscar-777-
-      - run: node buscar/buscar-en-espera.mjs
+      - if: steps.permiso.outputs.activo == 'true'
+        run: node buscar/buscar-en-espera.mjs
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           PRUEBA: ${{ inputs.prueba }}
@@ -52,7 +61,7 @@ jobs:
           MAX_MIN: 280
           IDLE_MIN: 5
       - name: Guardar lo consultado
-        if: always()
+        if: always() && steps.permiso.outputs.activo == 'true'
         uses: actions/cache/save@v4
         with:
           path: |

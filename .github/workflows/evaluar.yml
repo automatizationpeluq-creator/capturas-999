@@ -18,11 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: evaluar
+          sparse-checkout: |
+            evaluar
+            control
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node evaluar/evaluar-en-espera.mjs
+      - name: Comprobar pausa y trabajo antes de instalar
+        id: permiso
+        run: node control/preflight.mjs evaluar
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+      - if: steps.permiso.outputs.activo == 'true'
+        run: node evaluar/evaluar-en-espera.mjs
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           MAX_MIN: 55

@@ -20,7 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: capturas
-      - run: cd capturas && npm install --no-audit --no-fund playwright@1.47.2 >/dev/null && node capturar-en-espera.mjs
+          sparse-checkout: |
+            capturas
+            control
+      - name: Comprobar pausa y trabajo antes de instalar
+        id: permiso
+        run: node control/preflight.mjs capturas
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+      - if: steps.permiso.outputs.activo == 'true'
+        run: cd capturas && npm install --no-audit --no-fund playwright@1.47.2 >/dev/null && node capturar-en-espera.mjs
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
