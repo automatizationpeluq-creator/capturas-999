@@ -1,6 +1,5 @@
-# El juez de la nota del 999 (15-oct-2026, Manuel: «mete Ollama para que pueda decidir lo que sea necesario»).
-# Ollama con un modelo abierto, en la máquina de GitHub: gratis (repositorio público, sin claves de pago ni servicios externos).
-# Pone la nota (0-10) a cada web publicada que la espera; la nube aplica la regla de Manuel: con 8,3 o más la carpeta pasa a por enviar.
+# Revisión textual parcial del 999 con Ollama en GitHub Actions.
+# No sustituye al criterio maestro ni aprueba automáticamente una web.
 name: nota-999
 on:
   repository_dispatch:
@@ -25,12 +24,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Pruebas del contrato
+        run: node --test nota/notar-en-espera.test.mjs
+      - name: Comprobar trabajo pendiente
+        id: pendientes
+        env:
+          SECRETO_999: ${{ secrets.SECRETO_999 }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const r = await fetch('https://negocios.automtizationninameu.es/999/nota/pendientes', {
+            headers: { authorization: 'Bearer ' + process.env.SECRETO_999 },
+            signal: AbortSignal.timeout(120000)
+          });
+          if (!r.ok) throw new Error('No se pueden leer pendientes: HTTP ' + r.status);
+          const d = await r.json();
+          if (!Number.isInteger(d.pendientes) || d.pendientes < 0) throw new Error('Respuesta de pendientes inválida');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'cantidad=' + d.pendientes + '\n');
+          console.log('Revisiones textuales pendientes:', d.pendientes);
+          JS
       - name: Modelo guardado (caché de GitHub, para no bajarlo cada vez)
+        if: steps.pendientes.outputs.cantidad != '0'
         uses: actions/cache@v4
         with:
           path: .modelos
           key: ollama-qwen2.5-3b-instruct-v1
       - name: Ollama
+        if: steps.pendientes.outputs.cantidad != '0'
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           sudo systemctl stop ollama 2>/dev/null || true   # (el servicio del instalador no usa la carpeta de la caché)
@@ -38,6 +58,7 @@ jobs:
           for i in $(seq 1 30); do curl -s localhost:11434/api/tags >/dev/null && break; sleep 1; done
           ollama pull "$MODELO"
       - run: node nota/notar-en-espera.mjs
+        if: steps.pendientes.outputs.cantidad != '0'
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           MAX_MIN: 50
