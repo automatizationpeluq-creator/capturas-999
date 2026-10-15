@@ -1,7 +1,7 @@
 // El juez de la nota del 999 con Ollama (15-oct-2026). Pide a la nube las webs publicadas que esperan nota (/999/nota/pendientes), lee su
 // expediente (web + ficha), pide al modelo una nota de 0 a 10 con sus motivos y la devuelve por /999/revision (maestro.partial_score).
 // No rehace ni descarta nada: sólo la nota. La regla la aplica la nube (8,3 o más → por enviar; menos → para Manuel con los motivos).
-const BASE = 'https://negocios.automtizationninameu.es', S = process.env.SECRETO_999, MODELO = process.env.MODELO || 'qwen2.5:7b-instruct';
+const BASE = 'https://negocios.automtizationninameu.es', S = process.env.SECRETO_999, MODELO = process.env.MODELO || 'qwen2.5:3b-instruct';
 if (!S) { console.error('falta SECRETO_999'); process.exit(2); }
 const cab = { authorization: 'Bearer ' + S, 'user-agent': 'nota-999' };
 const t0 = Date.now(), MAX = (Number(process.env.MAX_MIN) || 50) * 60000;
@@ -17,9 +17,9 @@ Pon una NOTA de 0 a 10 a la web, con decimales, pensando en si el dueño del neg
 Escala: 9-10 se puede enviar ya y es excelente; 8,3-8,9 buena, se puede enviar; 6-8,2 tiene fallos que hay que arreglar; menos de 6 mal.
 Responde SOLO con JSON: {"nota": número, "motivos": ["frase corta", ...], "fallos": ["fallo concreto a corregir", ...]}`;
 async function juzgar(x) {
-  const texto = ['NEGOCIO: ' + (x.nombre || '') + ' · ' + (x.oficio || '') + ' · ' + (x.ciudad || ''), '', 'FICHA (lo que se sabe del negocio):', String((x.ficha && x.ficha.informe) || '').slice(0, 9000), '', 'TEXTO DE LA WEB:', String(x.web || '').slice(0, 9000)].join('\n');
+  const texto = ['NEGOCIO: ' + (x.nombre || '') + ' · ' + (x.oficio || '') + ' · ' + (x.ciudad || ''), '', 'FICHA (lo que se sabe del negocio):', String((x.ficha && x.ficha.informe) || '').slice(0, 4500), '', 'TEXTO DE LA WEB:', String(x.web || '').slice(0, 4500)].join('\n');
   const r = await fetch('http://localhost:11434/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(900000),
-    body: JSON.stringify({ model: MODELO, stream: false, format: 'json', options: { temperature: 0.1, num_ctx: 8192 }, messages: [{ role: 'system', content: CRITERIO }, { role: 'user', content: texto }] }) });
+    body: JSON.stringify({ model: MODELO, stream: false, format: 'json', options: { temperature: 0.1, num_ctx: 4096 }, messages: [{ role: 'system', content: CRITERIO }, { role: 'user', content: texto }] }) });
   const d = await r.json(); const j = JSON.parse(d.message && d.message.content || '{}');
   const nota = Math.max(0, Math.min(10, Math.round(Number(j.nota) * 10) / 10));
   if (!Number.isFinite(nota)) throw new Error('el modelo no dio nota');
