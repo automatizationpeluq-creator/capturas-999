@@ -85,7 +85,7 @@ jobs:
             trabajo-777/listas
             trabajo-777/proceso/web_cache.json
           key: buscar-777-consultado-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: La vuelta siguiente (siempre, salvo «sola»: la cadena no se corta)
+      - name: 'La vuelta siguiente (siempre, salvo «sola»; la cadena no se corta)'
         if: always() && inputs.sola == ''
         run: gh workflow run buscar-777.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
         env:
