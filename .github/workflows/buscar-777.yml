@@ -1,9 +1,12 @@
 # El 777 (fase 5, 19-oct-2026): búsqueda de negocios por localidad con los programas del 4-oct (reglas 2026-10-19, toda España), en GitHub.
 # El núcleo (negocios-nucleo, Cloudflare) da cada localidad y el código, y recibe el resultado; es el único que escribe en Drive. Repositorio
 # público: GitHub no cuenta minutos. Aquí no hay datos, ni código del 777, ni secretos (el secreto está en los Secrets del repositorio).
-# Cómo arranca: cada media hora mira si el 777 está encendido y tiene cola (preflight-777.mjs: apagado, se acaba en segundos sin instalar nada);
-# si al acabar su tiempo queda cola, pide otra vuelta él mismo. El núcleo no tiene permiso de GitHub para avisar (medido el 19-oct: sólo tiene
-# SECRETO_999 y SECRETO_WA), y no hace falta darle uno. A mano: «Run workflow», con «sola» para una localidad de verdad con el 777 apagado.
+# Cómo arranca: siempre hay una vuelta viva que espera (Manuel, 19-oct: «sería mejor hacerlo en un repositorio ilimitado»). preflight-777.mjs
+# pregunta al núcleo cada 2 minutos, hasta 60, si el 777 está encendido y tiene cola: al encenderlo en el panel empieza en menos de 2 minutos.
+# Esperando no instala nada. Al acabar, cada vuelta pide la siguiente ella misma (con el permiso propio del flujo): nunca se queda sin nadie.
+# La vuelta programada sólo vuelve a arrancar la cadena si se cortara (medido el 19-oct: en este repositorio llega cada 2–6 h). El núcleo no
+# necesita permiso de GitHub (medido: sólo tiene SECRETO_999 y SECRETO_WA). A mano: «Run workflow», con «sola» para una localidad de verdad
+# con el 777 apagado (esa vuelta no pide otra). Para pararlo del todo: «Disable workflow» en GitHub.
 # Nunca dos vueltas a la vez (una contra Google, como el 4-oct).
 name: buscar-777
 on:
@@ -42,6 +45,7 @@ jobs:
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           SOLA: ${{ inputs.sola }}
+          ESPERA_MIN: 60
       - name: Overture de España (una caché por versión)
         id: overture
         if: steps.permiso.outputs.activo == 'true'
@@ -65,7 +69,7 @@ jobs:
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
           SOLA: ${{ inputs.sola }}
-          MAX_MIN: 280
+          MAX_MIN: 250
           IDLE_MIN: 5
       - name: Guardar Overture
         if: always() && steps.permiso.outputs.activo == 'true' && steps.overture.outputs.cache-hit != 'true' && hashFiles('trabajo-777/proceso/overture/webs-telefonos.json') != ''
@@ -81,8 +85,8 @@ jobs:
             trabajo-777/listas
             trabajo-777/proceso/web_cache.json
           key: buscar-777-consultado-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Queda cola, otra vuelta
-        if: steps.buscar.outputs.quedan == 'true'
+      - name: La vuelta siguiente (siempre, salvo «sola»: la cadena no se corta)
+        if: always() && inputs.sola == ''
         run: gh workflow run buscar-777.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
         env:
           GH_TOKEN: ${{ github.token }}
