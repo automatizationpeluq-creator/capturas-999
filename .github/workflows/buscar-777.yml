@@ -8,7 +8,7 @@
 # necesita permiso de GitHub (medido: sólo tiene SECRETO_999 y SECRETO_WA). A mano: «Run workflow», con «sola» para una localidad de verdad
 # con el 777 apagado (esa vuelta no pide otra). Para pararlo del todo: «Disable workflow» en GitHub.
 # Si falta el secreto o el núcleo no lo acepta, la vuelta sale en rojo y no pide la siguiente (si no, habría una fallida cada medio minuto).
-# Nunca dos vueltas a la vez (una contra Google, como el 4-oct).
+# Nunca dos búsquedas a la vez (una contra Google, como el 4-oct): lo asegura el núcleo, que no da otra mientras una se busca.
 name: buscar-777
 on:
   schedule:
@@ -24,7 +24,10 @@ permissions:
   contents: read
   actions: write   # (para pedir la vuelta siguiente cuando queda cola)
 concurrency:
-  group: buscar-777
+  # La cadena, una viva y como mucho una esperando. Las «sola», en su propia cola (19-oct): en la misma, la vuelta que pide la cadena al acabar
+  # (o la programada) sustituía a la «sola» que esperaba y GitHub la cancelaba. Dos búsquedas a la vez contra Google no puede haber igual: el
+  # núcleo no da una localidad mientras otra se busca («ocupado»), tampoco a una «sola».
+  group: ${{ inputs.sola != '' && 'buscar-777-sola' || 'buscar-777' }}
   cancel-in-progress: false
 jobs:
   buscar:
