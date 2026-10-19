@@ -24,8 +24,8 @@ async function api(metodo, ruta, cuerpo) {
 
 // ¿Hay algo que mirar? (si no, se acaba aquí en segundos)
 const estado = await api('GET', '/999/github/estado');
-if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'activo=' + Boolean(estado.hay) + '\n');
-if (!estado.hay) { console.log(hora(), 'Nada que mirar' + (estado.cloudflareQueda ? ' (Cloudflare tiene horas: mira él)' : '')); process.exit(0); }
+if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'activo=' + Boolean(estado.hay || estado.pronto) + '\n');
+if (!estado.hay && !estado.pronto) { console.log(hora(), 'Nada que mirar' + (estado.mirarEn !== 'github' && estado.cloudflareQueda ? ' (Cloudflare tiene horas: mira él)' : '')); process.exit(0); }
 if (process.argv.includes('--solo-estado')) process.exit(0);
 
 const { js: MEDIR_JS, vistas: VISTAS, version } = await api('GET', '/999/github/medir');
@@ -62,6 +62,7 @@ async function vista(cdp, url, v) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   try {
     await cdp.send('Page.enable', {}, sessionId); await cdp.send('Network.enable', {}, sessionId);
+    try { await cdp.send('Page.bringToFront', {}, sessionId); await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId); } catch {} // (una pestaña oculta no da LCP: F16 quedaría «pending»)
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: v.width, height: v.height, deviceScaleFactor: v.deviceScaleFactor || 1, mobile: false }, sessionId);
     const carga = cdp.evento('Page.loadEventFired', sessionId, 30000);
     await cdp.send('Page.navigate', { url }, sessionId); await carga; await espera(1500);
@@ -81,13 +82,18 @@ async function vista(cdp, url, v) {
   } finally { try { await cdp.send('Target.closeTarget', { targetId }); } catch {} }
 }
 
+// Sólo mientras haya trabajo: si viene una web (el núcleo dice «espera»), se la espera como mucho 3 min; si no, se acaba. No se queda
+// encendida esperando (las condiciones de GitHub, 27-ago-2026: Actions no se usa «as part of a serverless application»).
 const fin = Date.now() + MINUTOS * 60000;
-let hechas = 0;
+const ESPERA_MAX = 3 * 60000;
+let hechas = 0, esperado = 0;
 const cdp = await abrir();
 try {
   while (Date.now() < fin) {
     const t = await api('POST', '/999/github/siguiente', {});
+    if (t && t.nada && t.espera && esperado < ESPERA_MAX) { const ms = Math.min(Number(t.espera) || 15000, 30000); esperado += ms; await espera(ms); continue; }
     if (!t || t.nada || !t.numero) { console.log(hora(), 'no queda nada que mirar' + (t && t.motivo ? ' (' + t.motivo + ')' : '')); break; }
+    esperado = 0;
     const medidas = {}, capturas = {}, errores = [];
     for (const nombre of ['movil', 'pc', 'estrecho']) {
       try { const r = await vista(cdp, t.url, VISTAS[nombre]); medidas[nombre] = r.medidas; if (!r.medidas) errores.push(nombre + ': sin #medidas-999'); if (nombre !== 'estrecho') { if (r.captura) capturas[nombre] = r.captura; else errores.push(nombre + ': sin captura'); } }
@@ -100,3 +106,5 @@ try {
   }
 } finally { await cdp.cerrar(); }
 console.log(hora(), hechas, 'miradas');
+// ¿Queda alguna esperando (se acabó el tiempo de esta vuelta)? Entonces la vuelta siguiente se pide ya, sin esperar a la hora programada.
+try { const e = await api('GET', '/999/github/estado'); if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'seguir=' + Boolean(e.hay) + '\n'); if (e.hay) console.log(hora(), 'quedan webs: se pide la vuelta siguiente'); } catch {}
