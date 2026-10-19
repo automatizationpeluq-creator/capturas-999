@@ -1,39 +1,40 @@
-// El 999 en GitHub (19-oct-2026): mirar y capturar las webs cuando se acaban las horas de navegador de Cloudflare incluidas en el plan.
-// Manuel, 11-oct 18:32: «configura esa segunda opción para cuando el límite de cloudflare gratis llegue. no se puede pasar»; 12-oct 23:17: «eso
-// se hace en github para no agobiar cloudflare y evitar cobros»; 19-oct: «no quiero pagar mas y lo de cloudflare se acaba».
-// El núcleo (negocios-nucleo) decide qué se mira y quién: aquí sólo se abre Chrome, se mide con SU código (MEDIR_JS, el mismo que usa Cloudflare;
-// el repositorio público no lo lleva) y se le devuelven las capturas y las medidas. Nada de datos ni secretos en el repositorio.
+// El 999 en GitHub: mirar y capturar las webs del 999. Siempre GitHub desde el 19-oct 21:50 (Manuel: «quiero que use siempre github que luego
+// vienen muchos problemas y siempre funcione así»; antes, 11-oct 18:32: «configura esa segunda opción para cuando el límite de cloudflare
+// gratis llegue»; 12-oct 23:17: «eso se hace en github para no agobiar cloudflare y evitar cobros»; 19-oct: «no quiero pagar mas»).
+// Cómo arranca (20-oct, como el 777): siempre hay una vuelta viva. Pregunta al núcleo cada minuto (cada 2 con el 999 apagado; cada 15 s si viene
+// una web) y, si hay web que mirar, abre Chrome y la mira. Al acabar su tiempo, capturas.yml pide la vuelta siguiente. Medido el 19-oct: la vuelta
+// programada de GitHub llega una o dos veces al día, no cada 15 min; sin esto una web esperaría horas. El núcleo no necesita llave de GitHub.
+// Si falta el secreto o el núcleo no lo acepta (401/403): cortar=true y la cadena se corta (si no, una vuelta fallida tras otra sin fin); la
+// vuelta programada la retoma cuando esté arreglado. Si el núcleo no contesta (se está subiendo), unos intentos; tras 5 seguidos esta vuelta
+// falla y la siguiente vuelve a empezar.
+// El núcleo (negocios-nucleo) decide qué se mira: aquí sólo se abre Chrome, se mide con SU código (MEDIR_JS, el mismo que usa Cloudflare; el
+// repositorio público no lo lleva) y se le devuelven las capturas y las medidas. Nada de datos ni secretos en el repositorio.
 // Sin dependencias: Node 22 (WebSocket propio) y el Chrome que trae la máquina de GitHub, por DevTools Protocol.
-//   SECRETO_999 (Secrets del repositorio) · NUCLEO (opcional) · CHROME (opcional: google-chrome) · MINUTOS (opcional: 25)
+//   SECRETO_999 (Secrets del repositorio) · NUCLEO (opcional) · CHROME (opcional: google-chrome) · MINUTOS (opcional: 55) · CADA_MS (60000)
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execSync } from 'node:child_process';
 
 const BASE = (process.env.NUCLEO || 'https://negocios.automtizationninameu.es').replace(/\/$/, ''), S = process.env.SECRETO_999;
-const MINUTOS = Number(process.env.MINUTOS || 25);
-if (!S) throw new Error('Falta el secreto del 999');
+const MINUTOS = Number(process.env.MINUTOS || 55), CADA_MS = Number(process.env.CADA_MS || 60000);
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const hora = () => new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid' });
+const salida = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, k + '=' + v + '\n'); };
+const cortar = (msj) => { console.log(hora(), msj + ': la cadena se corta; la vuelta programada la retoma cuando esté arreglado'); salida('cortar', 'true'); process.exit(0); };
+if (!S) cortar('Falta el secreto del 999 (SECRETO_999 en los Secrets del repositorio)');
 async function api(metodo, ruta, cuerpo) {
   const r = await fetch(BASE + '/api' + ruta, { method: metodo, headers: { authorization: 'Bearer ' + S, 'content-type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined, signal: AbortSignal.timeout(120000) });
+  if (r.status === 401 || r.status === 403) cortar('El núcleo no acepta el secreto del 999: HTTP ' + r.status);
   const t = await r.text(); let d; try { d = JSON.parse(t); } catch { d = { error: t.slice(0, 200) }; }
   if (!r.ok && r.status !== 409) throw new Error(ruta + ': HTTP ' + r.status + ' ' + (d.error || ''));
   return d;
 }
-
-// ¿Hay algo que mirar? (si no, se acaba aquí en segundos)
-const estado = await api('GET', '/999/github/estado');
-if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'activo=' + Boolean(estado.hay || estado.pronto) + '\n');
-if (!estado.hay && !estado.pronto) { console.log(hora(), 'Nada que mirar' + (estado.mirarEn !== 'github' && estado.cloudflareQueda ? ' (Cloudflare tiene horas: mira él)' : '')); process.exit(0); }
-if (process.argv.includes('--solo-estado')) process.exit(0);
-
-const { js: MEDIR_JS, vistas: VISTAS, version } = await api('GET', '/999/github/medir');
-console.log(hora(), 'mirar', version);
+if (process.argv.includes('--solo-estado')) { console.log(hora(), JSON.stringify(await api('GET', '/999/github/estado'))); process.exit(0); }
+let MEDIR_JS = '', VISTAS = null; // el código que mide lo da el núcleo (se pide al ir a mirar la primera)
 
 // ---------- Chrome por DevTools Protocol ----------
 const CHROME = process.env.CHROME || (() => { for (const c of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) { try { return execSync('command -v ' + c, { shell: '/bin/bash' }).toString().trim(); } catch {} } return ''; })();
-if (!CHROME) throw new Error('No hay Chrome en la máquina');
 async function abrir() {
   const perfil = fs.mkdtempSync(path.join(os.tmpdir(), 'mirar999-'));
   const p = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', '--user-data-dir=' + perfil, '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
@@ -82,18 +83,26 @@ async function vista(cdp, url, v) {
   } finally { try { await cdp.send('Target.closeTarget', { targetId }); } catch {} }
 }
 
-// Sólo mientras haya trabajo: si viene una web (el núcleo dice «espera»), se la espera como mucho 3 min; si no, se acaba. No se queda
-// encendida esperando (las condiciones de GitHub, 27-ago-2026: Actions no se usa «as part of a serverless application»).
+// ---------- la vuelta ----------
+// Chrome se abre sólo al ir a mirar y se cierra si pasan 10 min sin nada.
 const fin = Date.now() + MINUTOS * 60000;
-const ESPERA_MAX = 3 * 60000;
-let hechas = 0, esperado = 0;
-const cdp = await abrir();
+let hechas = 0, fallos = 0, cdp = null, ultimaMirada = Date.now(), dicho = '';
+const cerrarChrome = async () => { if (cdp) { await cdp.cerrar(); cdp = null; } };
 try {
   while (Date.now() < fin) {
-    const t = await api('POST', '/999/github/siguiente', {});
-    if (t && t.nada && t.espera && esperado < ESPERA_MAX) { const ms = Math.min(Number(t.espera) || 15000, 30000); esperado += ms; await espera(ms); continue; }
-    if (!t || t.nada || !t.numero) { console.log(hora(), 'no queda nada que mirar' + (t && t.motivo ? ' (' + t.motivo + ')' : '')); break; }
-    esperado = 0;
+    // una pregunta por vuelta del bucle: el estado (barato); sólo si hay web se pide la siguiente
+    let e, t = null;
+    try { e = await api('GET', '/999/github/estado'); if (e.hay) t = await api('POST', '/999/github/siguiente', {}); fallos = 0; } catch (x) { if (++fallos >= 5) throw x; console.log(hora(), String(x.message || x)); await espera(30000); continue; }
+    if (!t || t.nada || !t.numero) {
+      const pausa = e.pronto || (t && t.espera) ? 15000 : e.encendido || e.hay ? CADA_MS : 2 * CADA_MS;
+      const d = e.encendido ? 'encendido, esperando web' : 'el 999 está apagado'; if (d !== dicho) { console.log(hora(), d); dicho = d; }
+      if (cdp && Date.now() - ultimaMirada > 10 * 60000) await cerrarChrome();
+      if (Date.now() + pausa >= fin) break;
+      await espera(pausa); continue;
+    }
+    dicho = '';
+    if (!VISTAS) { const m = await api('GET', '/999/github/medir'); MEDIR_JS = m.js; VISTAS = m.vistas; console.log(hora(), 'mirar', m.version); }
+    if (!cdp) { if (!CHROME) throw new Error('No hay Chrome en la máquina'); cdp = await abrir(); }
     const medidas = {}, capturas = {}, errores = [];
     for (const nombre of ['movil', 'pc', 'estrecho']) {
       try { const r = await vista(cdp, t.url, VISTAS[nombre]); medidas[nombre] = r.medidas; if (!r.medidas) errores.push(nombre + ': sin #medidas-999'); if (nombre !== 'estrecho') { if (r.captura) capturas[nombre] = r.captura; else errores.push(nombre + ': sin captura'); } }
@@ -101,10 +110,9 @@ try {
     }
     const ok = Boolean(capturas.movil && capturas.pc && medidas.movil && medidas.pc && medidas.estrecho);
     const r = await api('POST', '/999/github/entregar', { numero: t.numero, version: t.version, ok, medidas, capturas: ok ? capturas : null, errores });
-    hechas++;
+    hechas++; ultimaMirada = Date.now();
     console.log(hora(), t.numero, ok ? 'mirada' : 'falló: ' + errores.join(' · '), '→', r.etapa || r.error || '');
   }
-} finally { await cdp.cerrar(); }
-console.log(hora(), hechas, 'miradas');
-// ¿Queda alguna esperando (se acabó el tiempo de esta vuelta)? Entonces la vuelta siguiente se pide ya, sin esperar a la hora programada.
-try { const e = await api('GET', '/999/github/estado'); if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'seguir=' + Boolean(e.hay) + '\n'); if (e.hay) console.log(hora(), 'quedan webs: se pide la vuelta siguiente'); } catch {}
+} finally { await cerrarChrome(); }
+console.log(hora(), hechas, 'miradas en esta vuelta; la siguiente la pide capturas.yml');
+salida('cortar', 'false');
