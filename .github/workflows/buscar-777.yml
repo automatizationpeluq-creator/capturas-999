@@ -31,7 +31,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   buscar:
-    runs-on: ubuntu-latest
+    # (19-oct) fija, no «ubuntu-latest»: GitHub la pasa a Ubuntu 26 desde el 19-oct-2026 (aviso en la vuelta 37); todo lo medido (DuckDB, Overture,
+    # lista.js) es en 24.04. Se cambia cuando se pruebe en la nueva.
+    runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:
       TRABAJO: ${{ github.workspace }}/trabajo-777
