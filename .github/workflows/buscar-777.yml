@@ -7,6 +7,7 @@
 # La vuelta programada sólo vuelve a arrancar la cadena si se cortara (medido el 19-oct: en este repositorio llega cada 2–6 h). El núcleo no
 # necesita permiso de GitHub (medido: sólo tiene SECRETO_999 y SECRETO_WA). A mano: «Run workflow», con «sola» para una localidad de verdad
 # con el 777 apagado (esa vuelta no pide otra). Para pararlo del todo: «Disable workflow» en GitHub.
+# Si falta el secreto o el núcleo no lo acepta, la vuelta sale en rojo y no pide la siguiente (si no, habría una fallida cada medio minuto).
 # Nunca dos vueltas a la vez (una contra Google, como el 4-oct).
 name: buscar-777
 on:
@@ -85,8 +86,11 @@ jobs:
             trabajo-777/listas
             trabajo-777/proceso/web_cache.json
           key: buscar-777-consultado-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: 'La vuelta siguiente (siempre, salvo «sola»; la cadena no se corta)'
-        if: always() && inputs.sola == ''
+      - name: 'La vuelta siguiente (siempre, salvo «sola» o si falta el secreto; la cadena no se corta)'
+        if: always() && inputs.sola == '' && steps.permiso.outputs.cortar != 'true'
         run: gh workflow run buscar-777.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: 'Cortada: falta el secreto o el núcleo no lo acepta (lo dice «¿Hay algo que buscar?»)'
+        if: always() && steps.permiso.outputs.cortar == 'true'
+        run: exit 1
