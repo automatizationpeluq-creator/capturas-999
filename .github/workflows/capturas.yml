@@ -1,34 +1,32 @@
-# Los ojos del 999, segunda vía (11-oct-2026): cuando Cloudflare llega a su tope del mes, las webs quedan «en espera» y este flujo
-# las captura (móvil y ordenador, página completa, tope 5 s por web) y las sube a la nube. Mismo método; sólo cambia dónde corre.
-# Repositorio público: GitHub no cuenta minutos. La nube lleva igualmente su tope de 1.950 min/mes. Aquí no hay datos ni secretos: las fotos van a la nube y a Drive.
+# El 999 en GitHub (19-oct-2026): mira y captura las webs cuando se acaban las horas de navegador de Cloudflare incluidas en el plan (y siempre, si
+# el ajuste del núcleo «999-mirar-en» es «github»). Manuel, 11-oct: «configura esa segunda opción para cuando el límite de cloudflare gratis llegue.
+# no se puede pasar»; 19-oct: «no quiero pagar mas y lo de cloudflare se acaba». Repositorio público: GitHub no cuenta minutos.
+# El núcleo (negocios-nucleo) decide qué se mira y da el código que mide; aquí no hay datos, ni ese código, ni secretos (SECRETO_999 en Secrets).
+# Cada 15 min pregunta si hay algo (si no, se acaba en segundos sin instalar nada). Sustituye al capturas-999 de la nube vieja (borrada el 18-oct).
 name: capturas-999
 on:
-  repository_dispatch:
-    types: [capturar]        # la nube avisa al quedar una web en espera
   schedule:
-    - cron: '17 */12 * * *'  # y cada 12 h por si se perdió un aviso
-  workflow_dispatch: {}
+    - cron: '4,19,34,49 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
-  group: capturas-999        # nunca dos vueltas a la vez (nada duplicado)
+  group: capturas-999
   cancel-in-progress: false
 jobs:
-  capturar:
+  mirar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    container:
-      image: mcr.microsoft.com/playwright:v1.47.2-noble   # Chromium ya instalado: la vuelta no gasta minutos instalándolo
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             capturas
-            control
-      - name: Comprobar pausa y trabajo antes de instalar
-        id: permiso
-        run: node control/preflight.mjs capturas
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Mirar y capturar lo que el núcleo tenga esperando
+        run: node capturas/mirar-en-espera.mjs
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
-      - if: steps.permiso.outputs.activo == 'true'
-        run: cd capturas && npm install --no-audit --no-fund playwright@1.47.2 >/dev/null && node capturar-en-espera.mjs
-        env:
-          SECRETO_999: ${{ secrets.SECRETO_999 }}
+          MINUTOS: '25'

@@ -1,11 +1,10 @@
+# (19-oct-2026) Sin hora programada: el juez del 999 entra por el núcleo (/api/999/juez); esto era de la nube vieja (borrada el 18-oct) y fallaba cada media hora. Se puede lanzar a mano.
 # Revisión textual parcial del 999 con Ollama en GitHub Actions.
 # No sustituye al criterio maestro ni aprueba automáticamente una web.
 name: nota-999
 on:
   repository_dispatch:
     types: [nota]
-  schedule:
-    - cron: '17,47 * * * *'  # cada media hora
   workflow_dispatch: {}
 concurrency:
   group: nota-999
