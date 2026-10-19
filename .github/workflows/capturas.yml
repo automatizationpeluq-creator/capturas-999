@@ -1,24 +1,27 @@
-# El 999 en GitHub (19-oct-2026): mira y captura las webs cuando se acaban las horas de navegador de Cloudflare incluidas en el plan (y siempre, si
-# el ajuste del núcleo «999-mirar-en» es «github»). Manuel, 11-oct: «configura esa segunda opción para cuando el límite de cloudflare gratis llegue.
-# no se puede pasar»; 19-oct: «no quiero pagar mas y lo de cloudflare se acaba». Repositorio público: GitHub no cuenta minutos.
+# El 999 en GitHub: mira y captura las webs del 999 (siempre GitHub desde el 19-oct 21:50: «quiero que use siempre github que luego vienen
+# muchos problemas y siempre funcione así»; 19-oct: «no quiero pagar mas»). Repositorio público: GitHub no cuenta minutos.
 # El núcleo (negocios-nucleo) decide qué se mira y da el código que mide; aquí no hay datos, ni ese código, ni secretos (SECRETO_999 en Secrets).
-# La despierta el núcleo cuando hay una web que mirar (con su llave GITHUB_999) y, si no, cada 15 min pregunta si hay algo (si no, se acaba
-# en segundos sin instalar nada). Si al acabar quedan webs, pide la vuelta siguiente. Sustituye al capturas-999 de la nube vieja (borrada el 18-oct).
+# Cómo arranca (20-oct, como buscar-777): siempre hay una vuelta viva que pregunta al núcleo cada minuto (cada 2 con el 999 apagado) si hay web
+# que mirar; al encender el 999 empieza en menos de un minuto. Esperando no abre Chrome. Al acabar, cada vuelta pide la siguiente ella misma
+# (con el permiso propio del flujo): nunca se queda sin nadie. La vuelta programada sólo vuelve a arrancar la cadena si se cortara (medido el
+# 19-oct: en este repositorio llega una o dos veces al día). El núcleo no necesita llave de GitHub.
+# Si falta el secreto o el núcleo no lo acepta, la vuelta sale en rojo y no pide la siguiente. Para pararlo del todo: «Disable workflow».
 name: capturas-999
 on:
   schedule:
-    - cron: '4,19,34,49 * * * *'
+    - cron: '4,34 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
-  actions: write   # (sólo para pedir la vuelta siguiente cuando quedan webs)
+  actions: write   # (para pedir la vuelta siguiente)
 concurrency:
-  group: capturas-999
+  group: capturas-999   # una viva y como mucho una esperando
   cancel-in-progress: false
 jobs:
   mirar:
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # fija, no «ubuntu-latest»: GitHub la pasa a Ubuntu 26 desde el 19-oct-2026; lo medido (Chrome por DevTools) es en 24.04, como el 777.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,14 +30,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Mirar y capturar lo que el núcleo tenga esperando
+      - name: Esperar y mirar lo que el núcleo tenga
         id: mirar
         run: node capturas/mirar-en-espera.mjs
         env:
           SECRETO_999: ${{ secrets.SECRETO_999 }}
-          MINUTOS: '25'
-      - name: 'La vuelta siguiente, si quedan webs (si no, la despierta el núcleo o la hora programada)'
-        if: steps.mirar.outputs.seguir == 'true'
+          MINUTOS: '55'
+      - name: 'La vuelta siguiente (siempre, salvo si falta el secreto; la cadena no se corta)'
+        if: always() && steps.mirar.outputs.cortar != 'true'
         run: gh workflow run capturas.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: 'Cortada: falta el secreto o el núcleo no lo acepta'
+        if: always() && steps.mirar.outputs.cortar == 'true'
+        run: exit 1
