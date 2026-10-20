@@ -38,7 +38,7 @@ jobs:
           MINUTOS: '55'
       - name: 'La vuelta siguiente (siempre, salvo si falta el secreto; la cadena no se corta)'
         if: always() && steps.mirar.outputs.cortar != 'true'
-        run: gh workflow run capturas.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+        run: for i in 1 2 3 4 5; do gh workflow run capturas.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" && exit 0; sleep 20; done; exit 1   # (5 intentos: un fallo de GitHub al pedirla cortaba la cadena horas)
         env:
           GH_TOKEN: ${{ github.token }}
       - name: 'Cortada: falta el secreto o el núcleo no lo acepta'
