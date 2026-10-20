@@ -4,7 +4,7 @@
 // Cómo arranca (20-oct, como el 777): siempre hay una vuelta viva. Pregunta al núcleo cada minuto (cada 2 con el 999 apagado; cada 15 s si viene
 // una web) y, si hay web que mirar, abre Chrome y la mira. Al acabar su tiempo, capturas.yml pide la vuelta siguiente. Medido el 19-oct: la vuelta
 // programada de GitHub llega una o dos veces al día, no cada 15 min; sin esto una web esperaría horas. El núcleo no necesita llave de GitHub.
-// Si falta el secreto o el núcleo no lo acepta (401/403): cortar=true y la cadena se corta (si no, una vuelta fallida tras otra sin fin); la
+// Si falta el secreto o el núcleo no lo acepta (401): cortar=true y la cadena se corta (si no, una vuelta fallida tras otra sin fin); la
 // vuelta programada la retoma cuando esté arreglado. Si el núcleo no contesta (se está subiendo), unos intentos; tras 5 seguidos esta vuelta
 // falla y la siguiente vuelve a empezar.
 // El núcleo (negocios-nucleo) decide qué se mira: aquí sólo se abre Chrome, se mide con SU código (MEDIR_JS, el mismo que usa Cloudflare; el
@@ -25,7 +25,7 @@ const cortar = (msj) => { console.log(hora(), msj + ': la cadena se corta; la vu
 if (!S) cortar('Falta el secreto del 999 (SECRETO_999 en los Secrets del repositorio)');
 async function api(metodo, ruta, cuerpo) {
   const r = await fetch(BASE + '/api' + ruta, { method: metodo, headers: { authorization: 'Bearer ' + S, 'content-type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined, signal: AbortSignal.timeout(120000) });
-  if (r.status === 401 || r.status === 403) cortar('El núcleo no acepta el secreto del 999: HTTP ' + r.status);
+  if (r.status === 401) cortar('El núcleo no acepta el secreto del 999: HTTP 401'); // (sólo 401: un 403 puede ser del borde de Cloudflare, pasajero; cuenta como fallo y se reintenta)
   const t = await r.text(); let d; try { d = JSON.parse(t); } catch { d = { error: t.slice(0, 200) }; }
   if (!r.ok && r.status !== 409) throw new Error(ruta + ': HTTP ' + r.status + ' ' + (d.error || ''));
   return d;
