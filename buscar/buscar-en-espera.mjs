@@ -75,6 +75,9 @@ fs.mkdirSync(L, { recursive: true });
 async function hacer(t) {
   const dir = path.join(L, t.slug), ti = Date.now();
   const registro = path.join(W, 'registro-' + t.slug + '.log'); fs.writeFileSync(registro, '');
+  // (20-oct) una que se vuelve a buscar (t.nueva) y que ya se buscó aquí: la caché guarda su HECHO.txt y su lista de entonces; si se dejaran, no se
+  // buscaría nada y se entregaría lo de antes. Se busca entera (lo que ya es contacto va en «conocidos» y no se repite).
+  if (t.nueva && fs.existsSync(path.join(dir, 'HECHO.txt'))) { fs.rmSync(dir, { recursive: true, force: true }); log('se vuelve a buscar entera:', t.slug); }
   // lo que ya existe (regla 04f: teléfono o correo en otra lista entregada → «ya en otra lista»): una lista con esas filas, marcada como entregada
   const K = path.join(L, '_conocidos'); fs.rmSync(K, { recursive: true, force: true }); fs.mkdirSync(K, { recursive: true });
   const q = (v) => '"' + String(v || '').replace(/"/g, '""') + '"';
